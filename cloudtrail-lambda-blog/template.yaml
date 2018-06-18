@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  cloudtrail-lambda-unomaly-blog
+
+Globals:
+  Function:
+    Timeout: 15
+
+Resources:
+  CloudTrailS3ToUnomalyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      # CodeUri: ./cloudtrailToUnomaly/
+      Handler: build/cloudtrail-lambda-unomaly-blog
+      Runtime: go1.x
+      Events:
+        CloudTrailS3WriteEvent:
+          Type: S3
+          Properties:
+            Events: "s3:ObjectCreated:*"
+            Bucket: !Ref S3CloudTrailBucket
+      Environment:
+        Variables:
+          UNOMALY_API_ENDPOINT: http://unomaly.internal/v1/batch
+          UNOMALY_BATCH_SIZE: 100
+      Policies:
+        Statement:
+          -
+            Effect: Allow
+            Action:
+              - s3:GetObject
+            Resource:
+              - "arn:aws:s3:::cloudtrail-bucket-unomaly-blog/*"
+  
+  S3CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: cloudtrail-bucket-unomaly-blog
+  
+  S3CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3CloudTrailBucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource:
+              - !GetAtt S3CloudTrailBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource:
+              - !Join ["", [!GetAtt S3CloudTrailBucket.Arn, "/*"]]
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+
+  UnomalyTrail:
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      IsMultiRegionTrail: false
+      S3BucketName: !Ref S3CloudTrailBucket
+      TrailName: UnomalyTrailBlog
+      IsLogging: true
+    DependsOn: S3CloudTrailBucketPolicy
