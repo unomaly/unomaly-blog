@@ -5,7 +5,9 @@ running with anomaly detection on your CloudTrail data using Unomaly!
 
 ## Deploying
 
-**Requirements:** AWS SAM CLI installed.
+### Requirements
+* AWS SAM CLI installed
+* Golang installed and available in the environment
 
 Everything should be deployable using just the makefile, `template.yaml` defines
 what should be created during the process and the `Makefile` is just used to
