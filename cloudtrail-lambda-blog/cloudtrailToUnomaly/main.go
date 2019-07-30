@@ -68,9 +68,9 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 	fmt.Println("Unomaly Endpoint: ", uCfg.Endpoint)
 	uCfg.getBatchSizeFromEnv()
 	fmt.Println("Unomaly Batch Size: ", uCfg.BatchSize)
-
+	fmt.Println("Connecting to S3...")
 	svc := s3.New(session.New())
-
+	fmt.Println("Connected to S3, fetching events")
 	var events []*unomalyPostBody
 
 	for _, record := range s3Event.Records {
@@ -114,8 +114,7 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 		}
 	}
 
-	fmt.Println("Number of messages to send: ", len(events))
-
+	fmt.Println("Number of messages to send to Unomaly: ", len(events))
 	for len(events) > 0 {
 		fmt.Println("Events left to process: ", len(events))
 		chunkSize := uCfg.BatchSize
