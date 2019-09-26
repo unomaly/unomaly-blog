@@ -26,8 +26,15 @@ type unomalyPostBody struct {
 
 type unomalyCfg struct {
 	Endpoint  string
-	UseSSL    bool
+	Insecure  bool
 	BatchSize int
+}
+
+func (cfg *unomalyCfg) getSSLFromEnv() {
+	insecure := os.Getenv("UNOMALY_INSECURE")
+	if insecure == "true" {
+		cfg.Insecure = true
+	}
 }
 
 func (cfg *unomalyCfg) getEndpointFromEnv() {
@@ -45,12 +52,12 @@ func (cfg *unomalyCfg) getBatchSizeFromEnv() error {
 
 var uCfg = new(unomalyCfg)
 
-func postToUnomaly(url string, payload []byte) error {
+func postToUnomaly(c *http.Client, url string, payload []byte) error {
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := client.Do(req)
+	resp, err := c.Do(req)
 	if err != nil {
 		return err
 	}
@@ -67,12 +74,17 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 	uCfg := new(unomalyCfg)
 	uCfg.getEndpointFromEnv()
 	fmt.Println("Unomaly Endpoint: ", uCfg.Endpoint)
+	uCfg.getSSLFromEnv()
+	fmt.Printf("Allow self-signed certs: %v \n", uCfg.Insecure)
 	uCfg.getBatchSizeFromEnv()
 	fmt.Println("Unomaly Batch Size: ", uCfg.BatchSize)
 	fmt.Println("Connecting to S3...")
 	svc := s3.New(session.New())
 	fmt.Println("Connected to S3, fetching events")
 	var events []*unomalyPostBody
+
+	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: uCfg.Insecure}}
+	client := &http.Client{Transport: tr}
 
 	for _, record := range s3Event.Records {
 		res, err := svc.GetObject(&s3.GetObjectInput{
@@ -130,7 +142,7 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 			return err
 		}
 
-		if err := postToUnomaly(uCfg.Endpoint, reqBody); err != nil {
+		if err := postToUnomaly(client, uCfg.Endpoint, reqBody); err != nil {
 			return err
 		}
 		fmt.Printf("Sending %d events to Unomaly endpoint\n", len(take))
@@ -139,10 +151,6 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 	return nil
 }
 
-var client *http.Client
-
 func main() {
-	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
-	client = &http.Client{Transport: tr}
 	lambda.Start(handler)
 }
