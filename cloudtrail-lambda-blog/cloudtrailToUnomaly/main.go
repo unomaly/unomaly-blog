@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,10 +46,10 @@ func (cfg *unomalyCfg) getBatchSizeFromEnv() error {
 var uCfg = new(unomalyCfg)
 
 func postToUnomaly(url string, payload []byte) error {
+
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
@@ -138,6 +139,10 @@ func handler(ctx context.Context, s3Event events.S3Event) error {
 	return nil
 }
 
+var client *http.Client
+
 func main() {
+	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
+	client = &http.Client{Transport: tr}
 	lambda.Start(handler)
 }
